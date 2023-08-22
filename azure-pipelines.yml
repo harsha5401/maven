@@ -1,0 +1,81 @@
+# Maven
+# Build your Java project and run tests with Apache Maven.
+# Add steps that analyze code, save build artifacts, deploy, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/languages/java
+
+trigger:
+- master
+
+variables:
+- group: aet
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+
+- task: JavaToolInstaller@0
+  inputs:
+    versionSpec: '8'
+    jdkArchitectureOption: 'x64'
+    jdkSourceOption: 'PreInstalled'
+    
+- task: Bash@3
+  inputs:
+    targetType: 'inline'
+    script: |
+      sudo apt-get install -y wget
+      sudo wget https://archive.apache.org/dist/maven/maven-3/3.5.4/binaries/apache-maven-3.5.4-bin.tar.gz
+      sudo tar -xf apache-maven-3.5.4-bin.tar.gz -C /opt
+      sudo mv /opt/apache-maven-3.5.4 /opt/maven
+      sudo rm apache-maven-3.5.4-bin.tar.gz
+      export M2_HOME=/opt/maven
+      export PATH=$PATH:$M2_HOME/bin
+      sudo ln -sf /opt/maven /usr/bin/mvn
+      which mvn
+  displayName: "Maven Installtion"
+      
+- script: |
+      export PATH=$PATH:/opt/maven/bin
+      mvn -B -DskipTests clean package
+  displayName: "Clean"
+
+- script: |
+      export PATH=$PATH:/opt/maven/bin
+      mvn test
+      mvn surefire-report:report
+  displayName: "Unit Test"
+
+- task: PublishTestResults@2
+  inputs:
+    testResultsFormat: 'JUnit'
+    testResultsFiles: '**/target/surefire-reports/TEST-*.xml'
+  displayName: "Publish JUnit Result"
+
+- script: |
+      export PATH=$PATH:/opt/maven/bin
+      mvn jacoco:report sonar:sonar -Dsonar.host.url=$(SONARHOST) -Dsonar.login=$(SONARTOKEN)
+  displayName: "Static Code Analysis"
+
+- task: PublishCodeCoverageResults@1
+  inputs:
+    codeCoverageTool: 'JaCoCo'
+    summaryFileLocation: '**/target/jacoco-ut/jacoco.xml'
+  displayName: "Publish JaCoCo  Code Coverage Result"
+
+- script: |
+      cd $(Build.SourcesDirectory)
+      sudo bash -x gate.sh $(SONARHOST) $(SONARTOKEN)
+  displayName: "Quality Gate"
+
+- script: |
+      export PATH=$PATH:/opt/maven/bin
+      mvn --batch-mode dependency-check:check -C
+  displayName: "Dependency check"
+
+- script: |
+      export PATH=$PATH:/opt/maven/bin
+      echo '<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd"><servers><server><id>$(JENKINSCREDID)</id><username>$(A_USERNAME)</username><password>$(A_PASSWORD)</password><filePermissions>664</filePermissions><directoryPermissions>775</directoryPermissions><configuration></configuration></server></servers></settings>' > settings2.xml
+
+      mvn deploy -s settings2.xml
+  displayName: "Store to Artifactory"
