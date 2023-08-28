@@ -43,12 +43,12 @@ pipeline {
  
     //start with a clean workspace
     stages {           	    
-	#stage('Clean') {             
-           # steps { 
-            #    sh 'echo build'                        
-             #   sh "mvn -B -DskipTests clean package"
-            #}
-        #}
+	//stage('Clean') {             
+           // steps { 
+            //    sh 'echo build'                        
+             //   sh "mvn -B -DskipTests clean package"
+            //}
+        //}
     
 	  // unit testing	    
        stage('Unit Test') {
